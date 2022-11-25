@@ -1,0 +1,124 @@
+---
+title: "Assignment 5"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+# Introduksjon
+
+Adaptasjon man får fra styrketrening varierer i stor grad av treningsvariabler som volum, intensitet, hvile mellom repetisjoner og sett, valg av øvelser og frekvensen på øvelsene (Ratamess et al., 2009). Totalt treningsvolum under økter har fått mye oppmerksomhet, og selv om man kan se at et lavt volum gir like adaptasjoner i muskelstyrke og hypertrofi som et moderat treningsvolum  (Cannon & Marino, 2010; 
+Ostrowski et al., 1997; Mitchell et al., 2012) konkluderer fremdeles meta-analyser i favør et moderat volum for best mulig effekt (Rhea et al., 2003; Krieger, 2009, 2010; Schoenfeld et al., 2016).
+
+Ettersom det er noe uenighet om hvilken treningsmetode som gir størst mulig effekt, vil vi i denne studien undersøke effektene av ett sett versus tre sett med styrketrening over en treningsperiode på 12 uker. Hypotesen er at gruppen som trener tre sett får større effekt på muskelstyrke og hypertrofi gjennom treningsintervensjonen på 12 uker. 
+
+# Metode
+
+41 kvinner og menn ble rekruttert til studiet. Inklusjonskriteriene for deltakelse var at deltagerne måtte være mellom 18 og 40 år, ikke-røykende, ha en treningshistorie med minst en ukentlig styrketreningsøkt det siste året og være skadefri. Sju av de opprinnelige 41 deltakerne ble ekskludert på bakgrunn av at de ikke klarte å fullføre 85% av planlagte treningsøkter av ulike grunner: smerter i underekstremitet under trening (n = 5), skade som ikke var relatert til studiet (n = 1), klarte ikke å gjennomføre studieprotokoll (n= 1).
+
+# Tester
+
+Styrketestene ble gjennomført før(pre) og etter(post) intervensjonen. Det ble gjennomført isokinetiske og isometriske unilaterale øvelser på kneekstensjon med  dynamometer (Cybex 6000, Cybex International, Medway USA). Maksimalt isokinetisk  dreiemoment ble målt på tre ulike vinkelhastigheter (60o, 120o og 240o s-1). Isometrisk styrke ble målt i 30o graders vinkel. 1RM ble målt i unilateral beinpress og kneekstensjon.
+
+En standardisert oppvarmingsprotokoll ble gjennomført med 5 minutter på ergometersykkel samt standardiserte oppvarmingsrepetisjoner i dynamometeret. Som oppvarming til 1RM testen ble det gjennomført  10, 6 og 3 repetisjoner på 50, 75 og 85% av forventet 1RM, respektivt. 1RM ble så funnet ved en gradvis økning av belastning til deltaker feilet å fullføre en repetisjon. Deltakerne fikk 4-6 forsøk og den høyeste belastningen ble så registrert som deltakerens 1RM.
+
+
+
+```{r}
+#| label: "figur"
+#| include: false
+#| warning: false
+#| message: false
+library(exscidata)
+data("dxadata"); data("strengthvolume")
+library(tidyverse)
+
+st2 <- strengthvolume %>% 
+  pivot_wider(names_from = time,
+              values_from = load) %>%
+  filter(exercise == "legext",
+         include == "incl") %>% 
+  mutate(post = as.numeric(post),
+         pre = as.numeric(pre),
+         change = post - pre,
+         N = n()/2)
+  m1 <- lm(post ~ pre + sets, data = st2)
+  m2 <- lm(post ~ sex + pre + sets, data = st2)
+  summary(m1)
+  summary(m2)
+  
+  
+ dat <- strengthvolume %>%
+  filter(exercise == "legext",
+         include == "incl",
+         time %in% c("pre", "post")) %>%
+    pivot_wider(names_from = "time", values_from = "load") %>% 
+  ggplot(aes(pre, post, color = sets)) + geom_point() + 
+  scale_color_manual(values = c("red", "blue")) +
+  geom_abline(intercept = coef(m1)[1], slope = coef(m1)[2], color = "red")  + 
+  geom_abline(intercept = coef(m1)[1] + coef(m1)[3], slope = coef(m1)[2], color = "blue") + 
+  labs(title = "Estimates from an ANCOVA model", 
+       subtitle = "post ~ pre + group", 
+       color = "Group") + theme_classic()
+   dat
+
+  
+  
+
+
+```
+
+
+```{r}
+#| label: "tableone"
+#| echo: false
+#| warning: false
+#| message: false
+library(tidyverse)
+library(exscidata)
+library(lme4)
+library(gt)
+ tbl_data <- dxadata %>%
+  select(participant:weight, lean.left_leg, lean.right_leg) %>%
+  pivot_longer(names_to = "leg", 
+               values_to = "lean.mass", 
+               cols = lean.left_leg:lean.right_leg) %>% 
+  mutate(leg = if_else(leg == "lean.left_leg", "L", "R"), 
+         sets = if_else(multiple == leg, "multiple", "single"),
+         lean.mass = lean.mass / 1000) %>%
+  select(participant, age, height, weight, time, sex, include, sets, leg, lean.mass) %>%
+  full_join(strengthvolume) %>% 
+  filter(exercise == "legext",
+         !is.na(load)) %>%
+    group_by(participant) %>% 
+  filter(time == "pre",
+         include == "incl") %>% 
+  group_by(sets) %>% 
+  mutate(N = n()) %>%
+  pivot_longer(names_to = "variable",
+               values_to = "values",
+               cols = c(age, height, weight, lean.mass, load, N)) %>%
+  group_by(sets, variable) %>% 
+  summarise(Mean = mean(values, na.rm = T),
+            SD = sd(values, na.rm = T)) %>%
+   mutate(N = if_else(variable == "N",
+  as.character(Mean),
+  paste0(signif(Mean, 3),
+  " (",signif(SD, 3),
+  ")"))) %>%
+  select(-SD, -Mean) %>%
+   mutate(variable = factor(variable, levels = c("N", "age", "height", "weight", "lean.mass", "load"),
+                            labels = c("N", "Alder", "Kroppslengde (cm)", "Kroppsvekt (kg)", "Fettfri masse (kg)", "1RM kneekstrensjon (kg)"))) %>% 
+  pivot_wider(names_from = sets,
+              values_from = N) %>%
+  gt() %>% 
+  cols_label(multiple = "3 sett",
+             single = "1 sett",
+             variable = "",) %>% 
+   tab_header(title = "Karakteristikker av deltakerne ved pretest ") %>%
+   tab_footnote(footnote = "Verdier er regnet som gjennomsnitt av N") 
+ tbl_data
+```
+
+
